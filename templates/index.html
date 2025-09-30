@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-<h2>Upload CV (paste text)</h2>
+<h2>Paste CV Text</h2>
 <form method="post">
   <textarea name="cvtext" placeholder="Paste your CV text here..."></textarea><br>
   <button type="submit">Extract & Recommend</button>
@@ -26,11 +26,11 @@
   <h3>Extracted Profile</h3>
   <form id="editProfileForm">
     <label>Name:</label>
-    <input type="text" name="name" value="{{student.name}}"><br>
+    <input type="text" name="name" value="{{ student.name or '' }}"><br>
     <label>Email:</label>
-    <input type="text" name="email" value="{{student.email}}"><br>
+    <input type="text" name="email" value="{{ student.email or '' }}"><br>
     <label>Skills:</label>
-    <input type="text" name="skills" value="{{student.skills|join(', ')}}"><br>
+    <input type="text" name="skills" value="{{ (student.skills or [])|join(', ') }}"><br>
     <button type="button" onclick="updateRecommendations()">Update Recommendations</button>
   </form>
 </div>
@@ -40,20 +40,20 @@
   <div id="recommendations">
     {% for rec in recommendations %}
       <div class="offer">
-        <b>{{rec.offer.title}}</b><br>
+        <b>{{ rec.offer.title }}</b><br>
         Matched Skills:
         {% for skill in rec.offer.skills %}
           {% if skill in student.skills %}
-            <span class="matched">{{skill}}</span>
+            <span class="matched">{{ skill }}</span>
           {% else %}
-            {{skill}}
+            {{ skill }}
           {% endif %}
           {% if not loop.last %}, {% endif %}
         {% endfor %}
         <br>
-        Similarity Score: {{rec.score}}
+        Match Score: {{ rec.score }}
         <div class="progress-container">
-          <div class="progress-bar" style="width:{{rec.score*100}}%"></div>
+          <div class="progress-bar" style="width:{{ (rec.score*33 if rec.score < 3 else 100) }}%"></div>
         </div>
       </div>
     {% endfor %}
@@ -66,16 +66,16 @@ function updateRecommendations(){
     const form = document.getElementById("editProfileForm");
     const name = form.name.value;
     const email = form.email.value;
-    const skills = form.skills.value.split(",").map(s=>s.trim());
+    const skills = form.skills.value.split(",").map(s=>s.trim()).filter(s=>s);
 
-    fetch("/tools/offers-search",{
+    fetch("/tools/offers-search", {
         method:"POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
             name: name,
             email: email,
             skills: skills,
-            embedding: []  // optional: embedding ignored, we could recompute on backend later
+            embedding: [] // ignored when USE_EMBEDDINGS=0
         })
     }).then(res=>res.json())
     .then(data=>{
@@ -83,15 +83,15 @@ function updateRecommendations(){
         container.innerHTML = "";
         data.forEach(rec=>{
             let matchedSkills = rec.offer.skills.map(s=>{
-                if(skills.includes(s)) return `<span class="matched">${s}</span>`;
-                else return s;
+                return skills.includes(s) ? `<span class="matched">${s}</span>` : s;
             }).join(", ");
+            let barWidth = Math.min(rec.score * 33, 100); // scale & cap
             container.innerHTML += `<div class="offer">
                 <b>${rec.offer.title}</b><br>
                 Matched Skills: ${matchedSkills}<br>
-                Similarity Score: ${rec.score}
+                Match Score: ${rec.score}
                 <div class="progress-container">
-                  <div class="progress-bar" style="width:${rec.score*100}%"></div>
+                  <div class="progress-bar" style="width:${barWidth}%"></div>
                 </div>
             </div>`;
         });
